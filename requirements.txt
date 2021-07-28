@@ -1,0 +1,5 @@
+tensorflow-gpu
+matplotlib
+fir1
+scipy
+tensorflow-probability
