@@ -3,3 +3,4 @@ matplotlib
 fir1
 scipy
 tensorflow-probability
+h5py
