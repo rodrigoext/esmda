@@ -66,18 +66,18 @@ class FCVAE(tf.keras.Model):
     
     def build_encoder(self):
 
-        encoder_inputs = tf.keras.Input(shape=self.img_shape)
+        encoder_inputs = tf.keras.Input(shape=(None,None,self.channels))
         x = tf.keras.layers.Conv2D(8*self.ff, 5, activation="relu", strides=1, padding="same")(encoder_inputs)
-        x = tf.keras.layers.Conv2D(8*self.ff, 5, activation="relu", strides=2, padding="same")(x)
-        x = tf.keras.layers.Conv2D(16*self.ff, 5, activation="relu", strides=1, padding="same")(x)
+        x = tf.keras.layers.Conv2D(8*self.ff, 5, activation="relu", strides=1, padding="same")(x)
+        x = tf.keras.layers.Conv2D(16*self.ff, 5, activation="relu", strides=2, padding="same")(x)
         
         # Regularization techniques
         #x = tf.keras.layers.Dropout(0.1)(x)  # Dropout regularization
         #x = tf.keras.layers.BatchNormalization()(x)  # Batch normalization
 
-        x = tf.keras.layers.Conv2D(16*self.ff, 3, activation="relu", strides=2, padding="same")(x)
+        x = tf.keras.layers.Conv2D(16*self.ff, 3, activation="relu", strides=1, padding="same")(x)
         x = tf.keras.layers.Conv2D(32*self.ff, 3, activation="relu", strides=1, padding="same")(x)
-        x = tf.keras.layers.Conv2D(32*self.ff, 3, activation="relu", strides=1, padding="same")(x)
+        x = tf.keras.layers.Conv2D(32*self.ff, 3, activation="relu", strides=2, padding="same")(x)
         
         # Regularization techniques
         #x = tf.keras.layers.Dropout(0.1)(x)  # Dropout regularization
@@ -93,17 +93,17 @@ class FCVAE(tf.keras.Model):
 
     def build_decoder(self):
 
-        latent_inputs = tf.keras.Input(shape=self.latent_dim_shape)
-        x = tf.keras.layers.Conv2DTranspose(32*self.ff, 3, activation="relu", strides=1, padding="same")(latent_inputs)
+        latent_inputs = tf.keras.Input(shape=(None, None, self.latent_size))
+        x = tf.keras.layers.Conv2DTranspose(32*self.ff, 3, activation="relu", strides=2, padding="same")(latent_inputs)
         x = tf.keras.layers.Conv2DTranspose(32*self.ff, 3, activation="relu", strides=1, padding="same")(x)
-        x = tf.keras.layers.Conv2DTranspose(16*self.ff, 3, activation="relu", strides=2, padding="same")(x)
+        x = tf.keras.layers.Conv2DTranspose(16*self.ff, 3, activation="relu", strides=1, padding="same")(x)
         
         # Regularization techniques
         #x = tf.keras.layers.Dropout(0.1)(x)  # Dropout regularization
         #x = tf.keras.layers.BatchNormalization()(x)  # Batch normalization
         
-        x = tf.keras.layers.Conv2DTranspose(16*self.ff, 5, activation="relu", strides=1, padding="same")(x)
-        x = tf.keras.layers.Conv2DTranspose(8*self.ff, 5, activation="relu", strides=2, padding="same")(x)
+        x = tf.keras.layers.Conv2DTranspose(16*self.ff, 5, activation="relu", strides=2, padding="same")(x)
+        x = tf.keras.layers.Conv2DTranspose(8*self.ff, 5,activation="relu", strides=1, padding="same")(x)
         x = tf.keras.layers.Conv2DTranspose(8*self.ff, 5, activation="relu", strides=1, padding="same")(x)
         
         # Regularization techniques
@@ -201,8 +201,8 @@ class VAE(tf.keras.Model):
         latent_inputs = tf.keras.Input(shape=self.latent_dim_shape,)
         x = tf.keras.layers.Dense(1024, activation="relu")(latent_inputs)
         #x = tf.keras.layers.Dropout(0.1)(x)
-        x = tf.keras.layers.Dense(10000, activation="relu")(x)
-        x = tf.keras.layers.Reshape((25, 25, 16))(x)
+        x = tf.keras.layers.Dense(self.latent_dim*16, activation="relu")(x)
+        x = tf.keras.layers.Reshape((12, 12, 16))(x)
         x = tf.keras.layers.Conv2DTranspose(16, 3, activation="relu", strides=1, padding="same")(x)
         x = tf.keras.layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
         x = tf.keras.layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
