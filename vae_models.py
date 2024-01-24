@@ -31,17 +31,19 @@ class SamplingDense(tf.keras.layers.Layer):
         return z_mean + tf.exp(0.5 * z_log_var) * epsilon
 
 class FCVAE(tf.keras.Model):
-    def __init__(self, img_size=48, lat_size=1, **kwargs):
+    def __init__(self, lat_size=500, input_dim=(48,48,4), **kwargs):
         super(FCVAE, self).__init__(**kwargs)
 
-        self.img_rows = img_size
-        self.img_cols = img_size
-        self.channels = 4
-        self.ff = 2
+        self.img_rows = input_dim[0]
+        self.img_cols = input_dim[1]
+        self.channels = input_dim[2]
+        self.kernel_size = 5
+        self.ff = 4
         self.latent_size = lat_size
         self.img_shape = (self.img_rows, self.img_cols, self.channels)
-        self.latent_dim = int(img_size/4)
+        self.latent_dim = int(self.img_rows/(2**2))
         self.latent_dim_shape = (self.latent_dim, self.latent_dim, self.latent_size)
+        self.epochs_drop = 20
 
         self.encoder = self.build_encoder()
         self.decoder = self.build_decoder()
@@ -51,28 +53,38 @@ class FCVAE(tf.keras.Model):
             name="reconstruction_loss"
         )
         self.kl_loss_tracker = tf.keras.metrics.Mean(name="kl_loss")
+    # learning rate schedule
+    def step_decay(self,epoch):
+        self.initial_lrate = tf.keras.backend.eval(self.optimizer.lr)
+        drop = 0.8
+        if (1+epoch)%self.epochs_drop == 0:
+            #lrate = self.initial_lrate * math.pow(drop, math.floor((1+epoch)/epochs_drop))
+            lrate=self.initial_lrate*drop
+        else:
+            lrate=self.initial_lrate
+        return lrate
     
     def build_encoder(self):
 
-        encoder_inputs = tf.keras.Input(shape=self.img_shape)
-        x = tf.keras.layers.Conv2D(8*self.ff, 3, activation="relu", strides=1, padding="same")(encoder_inputs)
-        x = tf.keras.layers.Conv2D(8*self.ff, 3, activation="relu", strides=2, padding="same")(x)
+        encoder_inputs = tf.keras.Input(shape=(None,None,self.channels))
+        x = tf.keras.layers.Conv2D(8*self.ff, 5, activation="relu", strides=1, padding="same")(encoder_inputs)
+        x = tf.keras.layers.Conv2D(8*self.ff, 5, activation="relu", strides=1, padding="same")(x)
+        x = tf.keras.layers.Conv2D(16*self.ff, 5, activation="relu", strides=2, padding="same")(x)
+        
+        # Regularization techniques
+        #x = tf.keras.layers.Dropout(0.1)(x)  # Dropout regularization
+        #x = tf.keras.layers.BatchNormalization()(x)  # Batch normalization
+
         x = tf.keras.layers.Conv2D(16*self.ff, 3, activation="relu", strides=1, padding="same")(x)
+        x = tf.keras.layers.Conv2D(32*self.ff, 3, activation="relu", strides=1, padding="same")(x)
+        x = tf.keras.layers.Conv2D(32*self.ff, 3, activation="relu", strides=2, padding="same")(x)
         
         # Regularization techniques
         #x = tf.keras.layers.Dropout(0.1)(x)  # Dropout regularization
         #x = tf.keras.layers.BatchNormalization()(x)  # Batch normalization
 
-        x = tf.keras.layers.Conv2D(16*self.ff, 3, activation="relu", strides=2, padding="same")(x)
-        x = tf.keras.layers.Conv2D(32*self.ff, 3, activation="relu", strides=1, padding="same")(x)
-        x = tf.keras.layers.Conv2D(32*self.ff, 3, activation="relu", strides=1, padding="same")(x)
-        
-        # Regularization techniques
-        #x = tf.keras.layers.Dropout(0.1)(x)  # Dropout regularization
-        #x = tf.keras.layers.BatchNormalization()(x)  # Batch normalization
-
-        z_mean = tf.keras.layers.Conv2D(self.latent_size, 3, activation="linear", strides=1, padding='same', name="z_mean")(x)
-        z_log_var = tf.keras.layers.Conv2D(self.latent_size, 3, activation="linear", strides=1, padding='same', name="z_log_var")(x)
+        z_mean = tf.keras.layers.Conv2D(self.latent_size, 3, strides=1, padding='same', name="z_mean")(x)
+        z_log_var = tf.keras.layers.Conv2D(self.latent_size, 3, strides=1, padding='same', name="z_log_var")(x)
         z = Sampling()([z_mean, z_log_var])
         encoder = tf.keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
         encoder.summary()
@@ -81,24 +93,23 @@ class FCVAE(tf.keras.Model):
 
     def build_decoder(self):
 
-        latent_inputs = tf.keras.Input(shape=self.latent_dim_shape)
-        x = tf.keras.layers.Conv2DTranspose(32*self.ff, 3, activation="relu", strides=1, padding="same")(latent_inputs)
+        latent_inputs = tf.keras.Input(shape=(None, None, self.latent_size))
+        x = tf.keras.layers.Conv2DTranspose(32*self.ff, 3, activation="relu", strides=2, padding="same")(latent_inputs)
         x = tf.keras.layers.Conv2DTranspose(32*self.ff, 3, activation="relu", strides=1, padding="same")(x)
+        x = tf.keras.layers.Conv2DTranspose(16*self.ff, 3, activation="relu", strides=1, padding="same")(x)
         
         # Regularization techniques
         #x = tf.keras.layers.Dropout(0.1)(x)  # Dropout regularization
         #x = tf.keras.layers.BatchNormalization()(x)  # Batch normalization
-
-        x = tf.keras.layers.Conv2DTranspose(16*self.ff, 3, activation="relu", strides=2, padding="same")(x)
-        x = tf.keras.layers.Conv2DTranspose(16*self.ff, 3, activation="relu", strides=1, padding="same")(x)
-        x = tf.keras.layers.Conv2DTranspose(8*self.ff, 3, activation="relu", strides=2, padding="same")(x)
+        
+        x = tf.keras.layers.Conv2DTranspose(16*self.ff, 5, activation="relu", strides=2, padding="same")(x)
+        x = tf.keras.layers.Conv2DTranspose(8*self.ff, 5,activation="relu", strides=1, padding="same")(x)
+        x = tf.keras.layers.Conv2DTranspose(8*self.ff, 5, activation="relu", strides=1, padding="same")(x)
         
         # Regularization techniques
         #x = tf.keras.layers.Dropout(0.9)(x)  # Dropout regularization
         #x = tf.keras.layers.BatchNormalization()(x)  # Batch normalization
-
-        x = tf.keras.layers.Conv2DTranspose(8*self.ff, 3, activation="relu", strides=1, padding="same")(x)
-        decoder_outputs = tf.keras.layers.Conv2DTranspose(self.channels, 3, activation="sigmoid", padding="same")(x)
+        decoder_outputs = tf.keras.layers.Conv2D(self.channels, 5, activation="sigmoid", padding="same")(x)
         decoder = tf.keras.Model(latent_inputs, decoder_outputs, name="decoder")
         decoder.summary()
 
@@ -140,14 +151,14 @@ class FCVAE(tf.keras.Model):
         }
 
 class VAE(tf.keras.Model):
-    def __init__(self, **kwargs):
+    def __init__(self, lat_size=500, input_dim=(48,48,4), **kwargs):
         super(VAE, self).__init__(**kwargs)
 
-        self.img_rows = 48
-        self.img_cols = 48
-        self.channels = 4
+        self.img_rows = input_dim[0]
+        self.img_cols = input_dim[1]
+        self.channels = input_dim[2]
         self.img_shape = (self.img_rows, self.img_cols, self.channels)
-        self.latent_dim = 500
+        self.latent_dim = lat_size
         self.latent_dim_shape = (self.latent_dim)
 
         self.encoder = self.build_encoder()
@@ -158,18 +169,27 @@ class VAE(tf.keras.Model):
             name="reconstruction_loss"
         )
         self.kl_loss_tracker = tf.keras.metrics.Mean(name="kl_loss")
-    
+    # learning rate schedule
+    def step_decay(self,epoch):
+        self.initial_lrate = tf.keras.backend.eval(self.model.optimizer.lr)
+        drop = 0.8
+        if (1+epoch)%self.epochs_drop == 0:
+            #lrate = self.initial_lrate * math.pow(drop, math.floor((1+epoch)/epochs_drop))
+            lrate=self.initial_lrate*drop
+        else:
+            lrate=self.initial_lrate
+
     def build_encoder(self):
 
         encoder_inputs = tf.keras.Input(shape=self.img_shape)
-        x = tf.keras.layers.Conv2D(128, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
-        x = tf.keras.layers.Conv2D(64, 3, activation="relu", strides=2, padding="same")(x)
-        x = tf.keras.layers.Conv2D(32, 3, activation="relu", strides=1, padding="same")(x)
+        x = tf.keras.layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(encoder_inputs)
+        x = tf.keras.layers.Conv2D(32, 3, activation="relu", strides=2, padding="same")(x)
+        x = tf.keras.layers.Conv2D(16, 3, activation="relu", strides=1, padding="same")(x)
         x = tf.keras.layers.Flatten()(x)
-        x = tf.keras.layers.Dense(2048, activation="relu")(x)
-        x = tf.keras.layers.Dropout(0.1)(x)
-        z_mean = tf.keras.layers.Dense(self.latent_dim, activation="linear", name="z_mean")(x)
-        z_log_var = tf.keras.layers.Dense(self.latent_dim, activation="linear", name="z_log_var")(x)
+        x = tf.keras.layers.Dense(1024, activation="relu")(x)
+        #x = tf.keras.layers.Dropout(0.1)(x)
+        z_mean = tf.keras.layers.Dense(self.latent_dim, name="z_mean")(x)
+        z_log_var = tf.keras.layers.Dense(self.latent_dim, name="z_log_var")(x)
         z = SamplingDense()([z_mean, z_log_var])
         encoder = tf.keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
         encoder.summary()
@@ -179,14 +199,14 @@ class VAE(tf.keras.Model):
     def build_decoder(self):
 
         latent_inputs = tf.keras.Input(shape=self.latent_dim_shape,)
-        x = tf.keras.layers.Dense(2048, activation="relu")(latent_inputs)
-        x = tf.keras.layers.Dropout(0.1)(x)
-        x = tf.keras.layers.Dense(4608, activation="relu")(x)
-        x = tf.keras.layers.Reshape((12, 12, 32))(x)
-        x = tf.keras.layers.Conv2DTranspose(32, 3, activation="relu", strides=1, padding="same")(x)
-        x = tf.keras.layers.Conv2DTranspose(64, 3, activation="relu", strides=2, padding="same")(x)
-        x = tf.keras.layers.Conv2DTranspose(128, 3, activation="relu", strides=2, padding="same")(x)
-        decoder_outputs = tf.keras.layers.Conv2DTranspose(self.channels, 3, activation="sigmoid", padding="same")(x)
+        x = tf.keras.layers.Dense(1024, activation="relu")(latent_inputs)
+        #x = tf.keras.layers.Dropout(0.1)(x)
+        x = tf.keras.layers.Dense(self.latent_dim*16, activation="relu")(x)
+        x = tf.keras.layers.Reshape((12, 12, 16))(x)
+        x = tf.keras.layers.Conv2DTranspose(16, 3, activation="relu", strides=1, padding="same")(x)
+        x = tf.keras.layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
+        x = tf.keras.layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
+        decoder_outputs = tf.keras.layers.Conv2DTranspose(self.channels, 2, activation="sigmoid", padding="same")(x)
         decoder = tf.keras.Model(latent_inputs, decoder_outputs, name="decoder")
         decoder.summary()
 
