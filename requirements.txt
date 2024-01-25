@@ -1,6 +1,10 @@
-tensorflow-gpu
-matplotlib
-fir1
-scipy
+tensorflow==2.4.4
 tensorflow-probability
+ipykernel
+numpy==1.19.5
+matplotlib
+wheel
+swig
+fir1=1.5.0.0
+scipy
 h5py
