@@ -96,11 +96,13 @@ def ES_MDA_DL(alp,Corr,obs,R,m_x,m_f,dim_shape,PRIOR,G,redeVAE):
     Alpha = np.ones((alp),dtype=int)*alp
     m_x_a = np.zeros(tuple([alp])+m_x.shape)
     m_f_a = np.zeros(tuple([alp])+m_f.shape)
+    error_a = np.zeros(alp+1)
     for i in range(len(Alpha)+1):
         Obs_sim,_ = get_obs_sim(m_x.T,dim_shape,PRIOR,G,redeVAE)
         Obs_sim = Obs_sim.T
+        error_a[i] = sum(sum(abs(Obs_sim-np.repeat(obs,Obs_sim.shape[-1],axis=1))))
         #mse = (abs(Obs_sim - np.repeat(obs,Obs_sim.shape[-1],axis=1)) ** 2).mean(axis=1).mean()
-        print('Error iteration',i, ' : ', sum(sum(abs(Obs_sim-np.repeat(obs,Obs_sim.shape[-1],axis=1)))))
+        print('Error iteration',i, ' : ', error_a[i])
         if i < len(Alpha):
             m_x = m_x.reshape([-1,m_x.shape[-1]])
             m_f = m_f.reshape([-1,m_f.shape[-1]])
@@ -112,4 +114,4 @@ def ES_MDA_DL(alp,Corr,obs,R,m_x,m_f,dim_shape,PRIOR,G,redeVAE):
             m_f =redeVAE.decode(m_x.T).numpy().reshape([m_x.T.shape[0],-1]).T
             m_x_a[i] = m_x
             m_f_a[i] = m_f
-    return m_f, m_x_a, m_f_a
+    return m_f, m_x_a, m_f_a, error_a

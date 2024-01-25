@@ -93,7 +93,7 @@ class FCVAE(tf.keras.Model):
 
     def build_decoder(self):
 
-        latent_inputs = tf.keras.Input(shape=(None, None, self.latent_size))
+        latent_inputs = tf.keras.Input(shape=(None, None, 3))
         x = tf.keras.layers.Conv2DTranspose(32*self.ff, 3, activation="relu", strides=2, padding="same")(latent_inputs)
         x = tf.keras.layers.Conv2DTranspose(32*self.ff, 3, activation="relu", strides=1, padding="same")(x)
         x = tf.keras.layers.Conv2DTranspose(16*self.ff, 3, activation="relu", strides=1, padding="same")(x)
@@ -199,9 +199,9 @@ class VAE(tf.keras.Model):
     def build_decoder(self):
 
         latent_inputs = tf.keras.Input(shape=self.latent_dim_shape,)
-        x = tf.keras.layers.Dense(1024, activation="relu")(latent_inputs)
+        x = tf.keras.layers.Dense(self.latent_dim, activation="relu")(latent_inputs)
         #x = tf.keras.layers.Dropout(0.1)(x)
-        x = tf.keras.layers.Dense(self.latent_dim*16, activation="relu")(x)
+        x = tf.keras.layers.Dense(12*12*16, activation="relu")(x)
         x = tf.keras.layers.Reshape((12, 12, 16))(x)
         x = tf.keras.layers.Conv2DTranspose(16, 3, activation="relu", strides=1, padding="same")(x)
         x = tf.keras.layers.Conv2DTranspose(32, 3, activation="relu", strides=2, padding="same")(x)
